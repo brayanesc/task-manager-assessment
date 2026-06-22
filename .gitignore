@@ -1,0 +1,57 @@
+# ---------- .NET ----------
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+artifacts/
+*.user
+*.suo
+*.userprefs
+.vs/
+TestResults/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# ---------- Angular / Node ----------
+node_modules/
+dist/
+tmp/
+out-tsc/
+.angular/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+# Angular/Karma coverage
+/frontend/coverage/
+
+# ---------- SQLite ----------
+# Assumes the database is created and seeded at startup (schema + seed as code).
+# If you instead commit a pre-seeded demo .db, whitelist it explicitly below.
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ---------- Secrets / local config ----------
+.env
+.env.local
+*.env
+appsettings.*.local.json
+secrets.json
+
+# ---------- IDE / OS ----------
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
