@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!--
+      Audit only direct dependencies. SQLitePCLRaw.lib.e_sqlite3 (transitive via
+      Microsoft.Data.Sqlite) carries GHSA-2m69-gcr7-jv3q; 2.1.11 is the latest
+      published version with no upstream fix. Re-evaluate when a fixed version ships.
+    -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
+  </PropertyGroup>
+</Project>

@@ -114,7 +114,27 @@ cd frontend && ng test
 
 ---
 
-## Out of scope (deliberate)
+## Architecture decisions & production extensions
+
+### Decisions made for this scope
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Password hashing | `ASP.NET Core PasswordHasher<T>` | In-box, no extra dependency; PBKDF2-SHA512 with a random salt, NIST-compliant. |
+| JWT signing | HS256 (symmetric) | Single service sharing one secret via environment config — sufficient for horizontal scaling of one service. See upgrade path below. |
+| Due-date storage | `DateOnly` → SQLite `TEXT` (`YYYY-MM-DD`) | SQLite has no native date type; ISO-8601 text sorts correctly and is unambiguous. Validated against `DateOnly.FromDateTime(DateTime.UtcNow)`. |
+| Data store | SQLite | Zero-config for demo portability. **Single-writer constraint** means it does not support multiple concurrent API instances writing simultaneously. For production, swap the `ITaskRepository` / `IUserRepository` implementations for PostgreSQL or SQL Server — no domain or application code changes needed. |
+
+### HS256 → RS256 upgrade path
+
+For multi-service architectures where token verification must be distributed (other services
+need to validate tokens without sharing the secret), upgrade to RS256:
+
+1. Generate an RSA key pair; store the private key in secrets, publish the public key via JWKS.
+2. Change `AddJwtBearer` signing credentials in `Infrastructure/Auth/JwtTokenService.cs` to use `RsaSecurityKey`.
+3. No domain, application, or controller code changes — the token shape is identical.
+
+### Out of scope (deliberate)
 
 The following were intentionally left out as production extensions, to keep the exercise
 appropriately scoped: Polly retry / circuit breaker for transient DB faults, rate limiting,
