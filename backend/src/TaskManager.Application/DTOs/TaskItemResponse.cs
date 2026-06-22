@@ -1,0 +1,11 @@
+using TaskManager.Domain.Enums;
+
+namespace TaskManager.Application.DTOs;
+
+public sealed record TaskItemResponse(
+    Guid Id,
+    string Title,
+    string Description,
+    TaskItemStatus Status,
+    DateOnly DueDate,
+    Guid UserId);
