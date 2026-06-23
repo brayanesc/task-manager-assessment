@@ -1,10 +1,9 @@
 using Moq;
-using TaskManager.Application.Exceptions;
+using TaskManager.Application.Common;
 using TaskManager.Application.Interfaces;
 using TaskManager.Application.UseCases;
 using TaskManager.Domain.Entities;
 using TaskManager.Domain.Enums;
-using TaskManager.Domain.Exceptions;
 
 namespace TaskManager.Application.Tests;
 
@@ -12,15 +11,17 @@ public class DeleteTaskUseCaseTests
 {
     private static readonly DateOnly Tomorrow = new DateOnly(2026, 6, 22).AddDays(1);
 
+    private readonly Mock<IUnitOfWork> _uow = new();
     private readonly Mock<ITaskRepository> _taskRepo = new();
     private readonly DeleteTaskUseCase _sut;
 
     public DeleteTaskUseCaseTests()
     {
-        _taskRepo
-            .Setup(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        _uow.Setup(u => u.Tasks).Returns(_taskRepo.Object);
+        _uow.Setup(u => u.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _taskRepo.Setup(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
-        _sut = new DeleteTaskUseCase(_taskRepo.Object);
+        _sut = new DeleteTaskUseCase(_uow.Object);
     }
 
     private void SetupGetById(Guid taskId, TaskItem? task) =>
@@ -29,68 +30,47 @@ public class DeleteTaskUseCaseTests
     // ── Happy path (AC: 204 No Content, task no longer exists) ───────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithOwnedTask_CallsDeleteRepository()
+    public async Task ExecuteAsync_WithOwnedTask_ReturnsOkAndCallsDelete()
     {
         var userId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        var task = TaskItem.Reconstitute(taskId, "My task", null, TaskItemStatus.Todo, Tomorrow, userId);
-        SetupGetById(taskId, task);
+        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "My task", null, TaskItemStatus.Todo, Tomorrow, userId));
 
-        await _sut.ExecuteAsync(taskId, userId, CancellationToken.None);
+        var result = await _sut.ExecuteAsync(taskId, userId, CancellationToken.None);
 
+        Assert.True(result.IsSuccess);
         _taskRepo.Verify(r => r.DeleteAsync(taskId, It.IsAny<CancellationToken>()), Times.Once);
+        _uow.Verify(u => u.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // ── AC: non-existent task returns 404 ────────────────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithNonExistentTask_ThrowsNotFoundException()
+    public async Task ExecuteAsync_WithNonExistentTask_ReturnsNotFound()
     {
-        var taskId = Guid.NewGuid();
-        SetupGetById(taskId, null);
+        SetupGetById(Guid.NewGuid(), null);
 
-        await Assert.ThrowsAsync<NotFoundException>(() =>
-            _sut.ExecuteAsync(taskId, Guid.NewGuid(), CancellationToken.None));
-    }
+        var result = await _sut.ExecuteAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
-    [Fact]
-    public async Task ExecuteAsync_WithNonExistentTask_NeverCallsDeleteRepository()
-    {
-        var taskId = Guid.NewGuid();
-        SetupGetById(taskId, null);
-
-        await Assert.ThrowsAsync<NotFoundException>(() =>
-            _sut.ExecuteAsync(taskId, Guid.NewGuid(), CancellationToken.None));
-
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.NotFound, result.Kind);
         _taskRepo.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _uow.Verify(u => u.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     // ── Ownership violation ───────────────────────────────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithOtherUsersTask_ThrowsDomainException()
+    public async Task ExecuteAsync_WithOtherUsersTask_ReturnsValidationFail()
     {
-        var ownerId = Guid.NewGuid();
-        var requesterId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        var task = TaskItem.Reconstitute(taskId, "Their task", null, TaskItemStatus.Todo, Tomorrow, ownerId);
-        SetupGetById(taskId, task);
+        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Their task", null, TaskItemStatus.Todo, Tomorrow, Guid.NewGuid()));
 
-        await Assert.ThrowsAsync<DomainException>(() =>
-            _sut.ExecuteAsync(taskId, requesterId, CancellationToken.None));
-    }
+        var result = await _sut.ExecuteAsync(taskId, Guid.NewGuid(), CancellationToken.None);
 
-    [Fact]
-    public async Task ExecuteAsync_OnOwnershipViolation_NeverCallsDeleteRepository()
-    {
-        var ownerId = Guid.NewGuid();
-        var taskId = Guid.NewGuid();
-        var task = TaskItem.Reconstitute(taskId, "Their task", null, TaskItemStatus.Todo, Tomorrow, ownerId);
-        SetupGetById(taskId, task);
-
-        await Assert.ThrowsAsync<DomainException>(() =>
-            _sut.ExecuteAsync(taskId, Guid.NewGuid(), CancellationToken.None));
-
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.Validation, result.Kind);
         _taskRepo.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        _uow.Verify(u => u.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }

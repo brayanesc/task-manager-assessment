@@ -1,39 +1,45 @@
+using TaskManager.Application.Common;
 using TaskManager.Application.DTOs;
 using TaskManager.Application.Interfaces;
 using TaskManager.Domain.Entities;
-using TaskManager.Domain.Exceptions;
 
 namespace TaskManager.Application.UseCases;
 
-public sealed class RegisterUserUseCase(IUserRepository userRepo, IPasswordHasher hasher)
+public sealed class RegisterUserUseCase(IUnitOfWork uow, IPasswordHasher hasher)
 {
-    public async Task ExecuteAsync(RegisterRequest request, CancellationToken ct = default)
+    public async Task<Result<Unit>> ExecuteAsync(RegisterRequest request, CancellationToken ct = default)
     {
-        ValidateRequest(request);
+        var validationError = Validate(request);
+        if (validationError is not null)
+            return Result<Unit>.Fail(validationError);
 
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
-        if (await userRepo.ExistsAsync(normalizedEmail, ct))
-            throw new DomainException("Email is already registered.");
+        if (await uow.Users.ExistsAsync(normalizedEmail, ct))
+            return Result<Unit>.Conflict("Email is already registered.");
 
         var hash = hasher.Hash(request.Password);
-        var user = User.Create(request.Email, hash); // User.Create trims and lowercases
-        await userRepo.CreateAsync(user, ct);
+        var user = User.Create(request.Email, hash);
+        await uow.Users.CreateAsync(user, ct);
+        await uow.CommitAsync(ct);
+        return Result<Unit>.Ok(Unit.Value);
     }
 
-    private static void ValidateRequest(RegisterRequest request)
+    private static string? Validate(RegisterRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Email))
-            throw new DomainException("Email must not be empty.");
+            return "Email must not be empty.";
 
         if (!IsValidEmailFormat(request.Email.Trim()))
-            throw new DomainException("Email format is invalid.");
+            return "Email format is invalid.";
 
         if (string.IsNullOrWhiteSpace(request.Password))
-            throw new DomainException("Password must not be empty.");
+            return "Password must not be empty.";
 
-        if (request.Password.Trim().Length > 0 && request.Password.Length < 8)
-            throw new DomainException("Password must be at least 8 characters.");
+        if (request.Password.Length < 8)
+            return "Password must be at least 8 characters.";
+
+        return null;
     }
 
     private static bool IsValidEmailFormat(string email)

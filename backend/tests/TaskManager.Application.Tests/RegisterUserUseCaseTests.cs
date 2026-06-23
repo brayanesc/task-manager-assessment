@@ -1,38 +1,39 @@
 using Moq;
+using TaskManager.Application.Common;
 using TaskManager.Application.DTOs;
 using TaskManager.Application.Interfaces;
 using TaskManager.Application.UseCases;
 using TaskManager.Domain.Entities;
-using TaskManager.Domain.Exceptions;
 
 namespace TaskManager.Application.Tests;
 
 public class RegisterUserUseCaseTests
 {
+    private readonly Mock<IUnitOfWork> _uow = new();
     private readonly Mock<IUserRepository> _userRepo = new();
     private readonly Mock<IPasswordHasher> _hasher = new();
     private readonly RegisterUserUseCase _sut;
 
     public RegisterUserUseCaseTests()
     {
-        _userRepo
-            .Setup(r => r.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
-        _userRepo
-            .Setup(r => r.CreateAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+        _uow.Setup(u => u.Users).Returns(_userRepo.Object);
+        _uow.Setup(u => u.CommitAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _userRepo.Setup(r => r.ExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _userRepo.Setup(r => r.CreateAsync(It.IsAny<User>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _hasher.Setup(h => h.Hash(It.IsAny<string>())).Returns("hashed_password");
-        _sut = new RegisterUserUseCase(_userRepo.Object, _hasher.Object);
+        _sut = new RegisterUserUseCase(_uow.Object, _hasher.Object);
     }
 
     // ── Happy path (AC: account created, password stored hashed) ─────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithValidInput_CreatesUser()
+    public async Task ExecuteAsync_WithValidInput_ReturnsOkAndCreatesUser()
     {
-        await _sut.ExecuteAsync(new RegisterRequest("alice@example.com", "P@ssword1"), CancellationToken.None);
+        var result = await _sut.ExecuteAsync(new RegisterRequest("alice@example.com", "P@ssword1"), CancellationToken.None);
 
+        Assert.True(result.IsSuccess);
         _userRepo.Verify(r => r.CreateAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Once);
+        _uow.Verify(u => u.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -58,28 +59,29 @@ public class RegisterUserUseCaseTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // ── Duplicate email (AC: must be unique) ──────────────────────────────────
+    // ── Duplicate email (AC: unique email required) ───────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithDuplicateEmail_ThrowsDomainException()
+    public async Task ExecuteAsync_WithDuplicateEmail_ReturnsConflict()
     {
         _userRepo.Setup(r => r.ExistsAsync("alice@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
-        var ex = await Assert.ThrowsAsync<DomainException>(() =>
-            _sut.ExecuteAsync(new RegisterRequest("alice@example.com", "P@ssword1"), CancellationToken.None));
+        var result = await _sut.ExecuteAsync(new RegisterRequest("alice@example.com", "P@ssword1"), CancellationToken.None);
 
-        Assert.Contains("email", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.Conflict, result.Kind);
+        Assert.Contains("email", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task ExecuteAsync_OnDuplicateEmail_NeverCallsCreate()
+    public async Task ExecuteAsync_OnDuplicateEmail_NeverCreatesUserOrCommits()
     {
         _userRepo.Setup(r => r.ExistsAsync("alice@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
-        await Assert.ThrowsAsync<DomainException>(() =>
-            _sut.ExecuteAsync(new RegisterRequest("alice@example.com", "P@ssword1"), CancellationToken.None));
+        await _sut.ExecuteAsync(new RegisterRequest("alice@example.com", "P@ssword1"), CancellationToken.None);
 
         _userRepo.Verify(r => r.CreateAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Never);
+        _uow.Verify(u => u.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     // ── Email validation ──────────────────────────────────────────────────────
@@ -87,21 +89,23 @@ public class RegisterUserUseCaseTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task ExecuteAsync_WithEmptyEmail_ThrowsDomainException(string email)
+    public async Task ExecuteAsync_WithEmptyEmail_ReturnsValidationFail(string email)
     {
-        await Assert.ThrowsAsync<DomainException>(() =>
-            _sut.ExecuteAsync(new RegisterRequest(email, "P@ssword1"), CancellationToken.None));
+        var result = await _sut.ExecuteAsync(new RegisterRequest(email, "P@ssword1"), CancellationToken.None);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.Validation, result.Kind);
     }
 
     [Theory]
     [InlineData("notanemail")]
     [InlineData("missing@dot")]
     [InlineData("@nodomain.com")]
-    public async Task ExecuteAsync_WithInvalidEmailFormat_ThrowsDomainException(string email)
+    public async Task ExecuteAsync_WithInvalidEmailFormat_ReturnsValidationFail(string email)
     {
-        var ex = await Assert.ThrowsAsync<DomainException>(() =>
-            _sut.ExecuteAsync(new RegisterRequest(email, "P@ssword1"), CancellationToken.None));
-        Assert.Contains("email", ex.Message, StringComparison.OrdinalIgnoreCase);
+        var result = await _sut.ExecuteAsync(new RegisterRequest(email, "P@ssword1"), CancellationToken.None);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.Validation, result.Kind);
+        Assert.Contains("email", result.Error, StringComparison.OrdinalIgnoreCase);
     }
 
     // ── Password validation ───────────────────────────────────────────────────
@@ -109,24 +113,25 @@ public class RegisterUserUseCaseTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task ExecuteAsync_WithEmptyPassword_ThrowsDomainException(string password)
+    public async Task ExecuteAsync_WithEmptyPassword_ReturnsValidationFail(string password)
     {
-        await Assert.ThrowsAsync<DomainException>(() =>
-            _sut.ExecuteAsync(new RegisterRequest("alice@example.com", password), CancellationToken.None));
+        var result = await _sut.ExecuteAsync(new RegisterRequest("alice@example.com", password), CancellationToken.None);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.Validation, result.Kind);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithPasswordShorterThan8Chars_ThrowsDomainException()
+    public async Task ExecuteAsync_WithPasswordShorterThan8Chars_ReturnsValidationFail()
     {
-        var ex = await Assert.ThrowsAsync<DomainException>(() =>
-            _sut.ExecuteAsync(new RegisterRequest("alice@example.com", "abc1234"), CancellationToken.None));
-        Assert.Contains("8", ex.Message);
+        var result = await _sut.ExecuteAsync(new RegisterRequest("alice@example.com", "abc1234"), CancellationToken.None);
+        Assert.False(result.IsSuccess);
+        Assert.Contains("8", result.Error);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithPasswordExactly8Chars_Succeeds()
+    public async Task ExecuteAsync_WithPasswordExactly8Chars_ReturnsOk()
     {
-        await _sut.ExecuteAsync(new RegisterRequest("alice@example.com", "abcd1234"), CancellationToken.None);
-        _userRepo.Verify(r => r.CreateAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()), Times.Once);
+        var result = await _sut.ExecuteAsync(new RegisterRequest("alice@example.com", "abcd1234"), CancellationToken.None);
+        Assert.True(result.IsSuccess);
     }
 }

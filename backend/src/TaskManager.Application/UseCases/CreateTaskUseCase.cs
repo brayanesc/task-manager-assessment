@@ -1,20 +1,29 @@
+using TaskManager.Application.Common;
 using TaskManager.Application.DTOs;
 using TaskManager.Application.Extensions;
 using TaskManager.Application.Interfaces;
 using TaskManager.Domain.Entities;
+using TaskManager.Domain.Exceptions;
 
 namespace TaskManager.Application.UseCases;
 
-public sealed class CreateTaskUseCase(ITaskRepository taskRepo, IClock clock)
+public sealed class CreateTaskUseCase(IUnitOfWork uow, IClock clock)
 {
-    public async Task<TaskItemResponse> ExecuteAsync(
+    public async Task<Result<TaskItemResponse>> ExecuteAsync(
         TaskItemRequest request,
         Guid userId,
         CancellationToken ct = default)
     {
-        // TaskItem.Create enforces title and due-date domain rules; throws DomainException on violation.
-        var task = TaskItem.Create(request.Title, request.Description, request.DueDate, userId, clock.Today);
-        await taskRepo.CreateAsync(task, ct);
-        return task.ToResponse();
+        try
+        {
+            var task = TaskItem.Create(request.Title, request.Description, request.DueDate, userId, clock.Today);
+            await uow.Tasks.CreateAsync(task, ct);
+            await uow.CommitAsync(ct);
+            return Result<TaskItemResponse>.Ok(task.ToResponse());
+        }
+        catch (DomainException ex)
+        {
+            return Result<TaskItemResponse>.Fail(ex.Message);
+        }
     }
 }

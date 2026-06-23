@@ -1,33 +1,41 @@
+using TaskManager.Application.Common;
 using TaskManager.Application.DTOs;
-using TaskManager.Application.Exceptions;
 using TaskManager.Application.Extensions;
 using TaskManager.Application.Interfaces;
 using TaskManager.Domain.Exceptions;
 
 namespace TaskManager.Application.UseCases;
 
-public sealed class UpdateTaskUseCase(ITaskRepository taskRepo, IClock clock)
+public sealed class UpdateTaskUseCase(IUnitOfWork uow, IClock clock)
 {
-    public async Task<TaskItemResponse> ExecuteAsync(
+    public async Task<Result<TaskItemResponse>> ExecuteAsync(
         Guid taskId,
         TaskItemRequest request,
         Guid userId,
         CancellationToken ct = default)
     {
-        var task = await taskRepo.GetByIdAsync(taskId, ct)
-            ?? throw new NotFoundException($"Task '{taskId}' was not found.");
+        var task = await uow.Tasks.GetByIdAsync(taskId, ct);
+        if (task is null)
+            return Result<TaskItemResponse>.NotFound($"Task '{taskId}' was not found.");
 
         if (task.UserId != userId)
-            throw new DomainException("You do not own this task.");
+            return Result<TaskItemResponse>.Fail("You do not own this task.");
 
-        // Only enforce due-date validation when the date is actually changing.
-        // A task with a past due date that persisted in the DB is still valid to edit
-        // as long as the caller is not trying to set a new past date.
-        var today = request.DueDate == task.DueDate ? request.DueDate : clock.Today;
+        try
+        {
+            // Pass the task's own DueDate as "today" when the date is unchanged,
+            // so the domain's dueDate >= today check is trivially satisfied for
+            // tasks that were created with a date that has since passed.
+            var today = request.DueDate == task.DueDate ? request.DueDate : clock.Today;
+            task.Update(request.Title, request.Description, request.Status, request.DueDate, today);
+        }
+        catch (DomainException ex)
+        {
+            return Result<TaskItemResponse>.Fail(ex.Message);
+        }
 
-        task.Update(request.Title, request.Description, request.Status, request.DueDate, today);
-
-        await taskRepo.UpdateAsync(task, ct);
-        return task.ToResponse();
+        await uow.Tasks.UpdateAsync(task, ct);
+        await uow.CommitAsync(ct);
+        return Result<TaskItemResponse>.Ok(task.ToResponse());
     }
 }

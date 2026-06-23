@@ -1,4 +1,5 @@
 using Moq;
+using TaskManager.Application.Common;
 using TaskManager.Application.Interfaces;
 using TaskManager.Application.UseCases;
 using TaskManager.Domain.Entities;
@@ -10,18 +11,20 @@ public class GetTaskByIdUseCaseTests
 {
     private static readonly DateOnly Tomorrow = new DateOnly(2026, 6, 22).AddDays(1);
 
+    private readonly Mock<IUnitOfWork> _uow = new();
     private readonly Mock<ITaskRepository> _taskRepo = new();
     private readonly GetTaskByIdUseCase _sut;
 
     public GetTaskByIdUseCaseTests()
     {
-        _sut = new GetTaskByIdUseCase(_taskRepo.Object);
+        _uow.Setup(u => u.Tasks).Returns(_taskRepo.Object);
+        _sut = new GetTaskByIdUseCase(_uow.Object);
     }
 
     // ── Happy path ────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithOwnedTask_ReturnsMappedResponse()
+    public async Task ExecuteAsync_WithOwnedTask_ReturnsOkWithMappedResponse()
     {
         var userId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
@@ -30,38 +33,40 @@ public class GetTaskByIdUseCaseTests
 
         var result = await _sut.ExecuteAsync(taskId, userId, CancellationToken.None);
 
-        Assert.NotNull(result);
-        Assert.Equal(taskId, result!.Id);
-        Assert.Equal("My task", result.Title);
-        Assert.Equal(userId, result.UserId);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(taskId, result.Value!.Id);
+        Assert.Equal("My task", result.Value.Title);
+        Assert.Equal(userId, result.Value.UserId);
     }
 
     // ── Not found ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithNonExistentTask_ReturnsNull()
+    public async Task ExecuteAsync_WithNonExistentTask_ReturnsNotFound()
     {
-        var taskId = Guid.NewGuid();
-        _taskRepo.Setup(r => r.GetByIdAsync(taskId, It.IsAny<CancellationToken>())).ReturnsAsync((TaskItem?)null);
+        _taskRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TaskItem?)null);
 
-        var result = await _sut.ExecuteAsync(taskId, Guid.NewGuid(), CancellationToken.None);
+        var result = await _sut.ExecuteAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
-        Assert.Null(result);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.NotFound, result.Kind);
     }
 
-    // ── AC: task belonging to another user returns null (404) ─────────────────
+    // ── AC: task belonging to another user returns NotFound (prevents data enumeration) ─
 
     [Fact]
-    public async Task ExecuteAsync_WithOtherUsersTask_ReturnsNull()
+    public async Task ExecuteAsync_WithOtherUsersTask_ReturnsNotFound()
     {
         var ownerId = Guid.NewGuid();
-        var requesterId = Guid.NewGuid(); // different user
+        var requesterId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
         var task = TaskItem.Reconstitute(taskId, "Their task", null, TaskItemStatus.Todo, Tomorrow, ownerId);
         _taskRepo.Setup(r => r.GetByIdAsync(taskId, It.IsAny<CancellationToken>())).ReturnsAsync(task);
 
         var result = await _sut.ExecuteAsync(taskId, requesterId, CancellationToken.None);
 
-        Assert.Null(result);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.NotFound, result.Kind);
     }
 }

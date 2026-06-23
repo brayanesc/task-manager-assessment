@@ -1,4 +1,5 @@
 using Moq;
+using TaskManager.Application.Common;
 using TaskManager.Application.DTOs;
 using TaskManager.Application.Interfaces;
 using TaskManager.Application.UseCases;
@@ -8,6 +9,7 @@ namespace TaskManager.Application.Tests;
 
 public class LoginUseCaseTests
 {
+    private readonly Mock<IUnitOfWork> _uow = new();
     private readonly Mock<IUserRepository> _userRepo = new();
     private readonly Mock<IPasswordHasher> _hasher = new();
     private readonly Mock<ITokenService> _tokenService = new();
@@ -18,32 +20,31 @@ public class LoginUseCaseTests
 
     public LoginUseCaseTests()
     {
-        _sut = new LoginUseCase(_userRepo.Object, _hasher.Object, _tokenService.Object);
+        _uow.Setup(u => u.Users).Returns(_userRepo.Object);
+        _sut = new LoginUseCase(_uow.Object, _hasher.Object, _tokenService.Object);
     }
 
     // ── Happy path (AC: receive JWT on valid credentials) ────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithValidCredentials_ReturnsAuthResponse()
+    public async Task ExecuteAsync_WithValidCredentials_ReturnsOkWithToken()
     {
-        _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Alice);
+        _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(Alice);
         _hasher.Setup(h => h.Verify("P@ssword1", "stored_hash")).Returns(true);
         _tokenService.Setup(t => t.GenerateToken(Alice)).Returns("jwt.token.value");
 
         var result = await _sut.ExecuteAsync(new LoginRequest("alice@example.com", "P@ssword1"), CancellationToken.None);
 
-        Assert.NotNull(result);
-        Assert.Equal("jwt.token.value", result!.Token);
-        Assert.Equal("alice@example.com", result.Email);
+        Assert.True(result.IsSuccess);
+        Assert.Equal("jwt.token.value", result.Value!.Token);
+        Assert.Equal("alice@example.com", result.Value.Email);
     }
 
     [Fact]
     public async Task ExecuteAsync_WithValidCredentials_CallsGenerateToken()
     {
-        _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Alice);
-        _hasher.Setup(h => h.Verify("P@ssword1", "stored_hash")).Returns(true);
+        _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(Alice);
+        _hasher.Setup(h => h.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(true);
         _tokenService.Setup(t => t.GenerateToken(It.IsAny<User>())).Returns("token");
 
         await _sut.ExecuteAsync(new LoginRequest("alice@example.com", "P@ssword1"), CancellationToken.None);
@@ -51,37 +52,36 @@ public class LoginUseCaseTests
         _tokenService.Verify(t => t.GenerateToken(Alice), Times.Once);
     }
 
-    // ── AC: 401 Unauthorized when no valid token ──────────────────────────────
+    // ── AC: 401 Unauthorized when credentials invalid ─────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithNonExistentEmail_ReturnsNull()
+    public async Task ExecuteAsync_WithNonExistentEmail_ReturnsValidationFail()
     {
-        _userRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((User?)null);
+        _userRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
 
         var result = await _sut.ExecuteAsync(new LoginRequest("ghost@example.com", "P@ssword1"), CancellationToken.None);
 
-        Assert.Null(result);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.Validation, result.Kind);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithWrongPassword_ReturnsNull()
+    public async Task ExecuteAsync_WithWrongPassword_ReturnsValidationFail()
     {
-        _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Alice);
+        _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(Alice);
         _hasher.Setup(h => h.Verify("WrongPassword", "stored_hash")).Returns(false);
 
         var result = await _sut.ExecuteAsync(new LoginRequest("alice@example.com", "WrongPassword"), CancellationToken.None);
 
-        Assert.Null(result);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.Validation, result.Kind);
     }
 
     [Fact]
     public async Task ExecuteAsync_WithWrongPassword_NeverCallsGenerateToken()
     {
-        _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Alice);
-        _hasher.Setup(h => h.Verify(It.IsAny<string>(), "stored_hash")).Returns(false);
+        _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(Alice);
+        _hasher.Setup(h => h.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
 
         await _sut.ExecuteAsync(new LoginRequest("alice@example.com", "bad"), CancellationToken.None);
 
@@ -95,10 +95,11 @@ public class LoginUseCaseTests
     [InlineData("   ", "P@ssword1")]
     [InlineData("alice@example.com", "")]
     [InlineData("alice@example.com", "   ")]
-    public async Task ExecuteAsync_WithEmptyCredentials_ReturnsNull(string email, string password)
+    public async Task ExecuteAsync_WithEmptyCredentials_ReturnsValidationFail(string email, string password)
     {
         var result = await _sut.ExecuteAsync(new LoginRequest(email, password), CancellationToken.None);
-        Assert.Null(result);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultKind.Validation, result.Kind);
     }
 
     // ── Email look-up is case-insensitive ─────────────────────────────────────
@@ -106,8 +107,7 @@ public class LoginUseCaseTests
     [Fact]
     public async Task ExecuteAsync_NormalizesEmailForLookup()
     {
-        _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Alice);
+        _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(Alice);
         _hasher.Setup(h => h.Verify(It.IsAny<string>(), It.IsAny<string>())).Returns(true);
         _tokenService.Setup(t => t.GenerateToken(It.IsAny<User>())).Returns("token");
 

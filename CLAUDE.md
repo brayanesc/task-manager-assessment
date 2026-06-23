@@ -14,6 +14,11 @@ Will be code-reviewed by a senior panel.
 - .NET 10, C#. PascalCase projects: TaskManager.Domain, .Application, .Infrastructure, .Api.
 - async/await end-to-end. Passwords hashed, never logged. JWT auth.
 - No business logic in controllers.
+- Result Pattern: use cases return Result<T> instead of throwing for business rule
+  failures. DomainException reserved for unexpected/unrecoverable errors only.
+- Unit of Work: use cases receive IUnitOfWork (defined in Application) instead of
+  individual repositories. IUnitOfWork owns the transaction scope.
+  Infrastructure implementation: UnitOfWork wraps SqliteConnection + SqliteTransaction.
 
 ## Frontend conventions
 - Angular 18: standalone components, signals for local state, async pipe for streams.
