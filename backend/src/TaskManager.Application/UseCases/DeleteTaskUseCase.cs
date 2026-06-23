@@ -15,7 +15,7 @@ public sealed class DeleteTaskUseCase(IUnitOfWork uow)
             return Result<Unit>.NotFound($"Task '{taskId}' was not found.");
 
         if (task.UserId != userId)
-            return Result<Unit>.Fail("You do not own this task.");
+            return Result<Unit>.Forbidden("You do not own this task.");
 
         await uow.Tasks.DeleteAsync(taskId, ct);
         await uow.CommitAsync(ct);

@@ -17,8 +17,8 @@ public sealed class JwtTokenService : ITokenService
 
     public JwtTokenService(IConfiguration config)
     {
-        var secret = config["Jwt:Secret"]
-            ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
+        var secret = config["Jwt:Key"]
+            ?? throw new InvalidOperationException("Jwt:Key is not configured.");
 
         _key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         _issuer = config["Jwt:Issuer"] ?? "taskmanager";

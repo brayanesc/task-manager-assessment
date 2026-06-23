@@ -18,7 +18,7 @@ public sealed class LoginUseCase(
         var user = await uow.Users.GetByEmailAsync(normalizedEmail, ct);
 
         if (user is null || !hasher.Verify(request.Password, user.PasswordHash))
-            return Result<AuthResponse>.Fail("Invalid email or password.");
+            return Result<AuthResponse>.Unauthorized("Invalid email or password.");
 
         var token = tokenService.GenerateToken(user);
         return Result<AuthResponse>.Ok(new AuthResponse(token, user.Email));

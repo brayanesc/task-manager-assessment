@@ -100,7 +100,7 @@ public class UpdateTaskUseCaseTests
     // ── Ownership (AC: rejected when task belongs to another user) ─────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithOtherUsersTask_ReturnsValidationFail()
+    public async Task ExecuteAsync_WithOtherUsersTask_ReturnsForbidden()
     {
         var taskId = Guid.NewGuid();
         SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.Todo, Tomorrow, Guid.NewGuid()));
@@ -110,7 +110,7 @@ public class UpdateTaskUseCaseTests
             Guid.NewGuid(), CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(ResultKind.Validation, result.Kind);
+        Assert.Equal(ResultKind.Forbidden, result.Kind);
         _taskRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>(), It.IsAny<CancellationToken>()), Times.Never);
         _uow.Verify(u => u.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
     }

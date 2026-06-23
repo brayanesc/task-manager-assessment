@@ -1,6 +1,6 @@
 namespace TaskManager.Application.Common;
 
-public enum ResultKind { Ok, Validation, NotFound, Conflict }
+public enum ResultKind { Ok, Validation, NotFound, Conflict, Unauthorized, Forbidden }
 
 public readonly struct Result<T>
 {
@@ -20,4 +20,6 @@ public readonly struct Result<T>
     public static Result<T> Fail(string error) => new(default, error, ResultKind.Validation);
     public static Result<T> NotFound(string error) => new(default, error, ResultKind.NotFound);
     public static Result<T> Conflict(string error) => new(default, error, ResultKind.Conflict);
+    public static Result<T> Unauthorized(string error) => new(default, error, ResultKind.Unauthorized);
+    public static Result<T> Forbidden(string error) => new(default, error, ResultKind.Forbidden);
 }

@@ -7,13 +7,13 @@ using TaskManager.Domain.Enums;
 
 namespace TaskManager.Infrastructure.Persistence;
 
-internal sealed class TaskRepository(SqliteConnection connection, SqliteTransaction transaction)
+internal sealed class TaskRepository(SqliteConnection connection, Func<SqliteTransaction?> getTransaction)
     : ITaskRepository
 {
     public async Task<TaskItem?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         await using var cmd = connection.CreateCommand();
-        cmd.Transaction = transaction;
+        cmd.Transaction = getTransaction();
         cmd.CommandText = "SELECT id, title, description, status, due_date, user_id FROM Tasks WHERE id = @id";
         cmd.Parameters.AddWithValue("@id", id.ToString());
 
@@ -27,13 +27,13 @@ internal sealed class TaskRepository(SqliteConnection connection, SqliteTransact
         var offset = (page - 1) * pageSize;
 
         await using var countCmd = connection.CreateCommand();
-        countCmd.Transaction = transaction;
+        countCmd.Transaction = getTransaction();
         countCmd.CommandText = "SELECT COUNT(*) FROM Tasks WHERE user_id = @userId";
         countCmd.Parameters.AddWithValue("@userId", userId.ToString());
         var totalCount = (long)(await countCmd.ExecuteScalarAsync(ct))!;
 
         await using var cmd = connection.CreateCommand();
-        cmd.Transaction = transaction;
+        cmd.Transaction = getTransaction();
         cmd.CommandText = """
             SELECT id, title, description, status, due_date, user_id
             FROM Tasks
@@ -56,7 +56,7 @@ internal sealed class TaskRepository(SqliteConnection connection, SqliteTransact
     public async Task CreateAsync(TaskItem task, CancellationToken ct = default)
     {
         await using var cmd = connection.CreateCommand();
-        cmd.Transaction = transaction;
+        cmd.Transaction = getTransaction();
         cmd.CommandText = """
             INSERT INTO Tasks (id, title, description, status, due_date, user_id)
             VALUES (@id, @title, @description, @status, @dueDate, @userId)
@@ -68,7 +68,7 @@ internal sealed class TaskRepository(SqliteConnection connection, SqliteTransact
     public async Task UpdateAsync(TaskItem task, CancellationToken ct = default)
     {
         await using var cmd = connection.CreateCommand();
-        cmd.Transaction = transaction;
+        cmd.Transaction = getTransaction();
         cmd.CommandText = """
             UPDATE Tasks
             SET title = @title, description = @description, status = @status, due_date = @dueDate
@@ -81,7 +81,7 @@ internal sealed class TaskRepository(SqliteConnection connection, SqliteTransact
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         await using var cmd = connection.CreateCommand();
-        cmd.Transaction = transaction;
+        cmd.Transaction = getTransaction();
         cmd.CommandText = "DELETE FROM Tasks WHERE id = @id";
         cmd.Parameters.AddWithValue("@id", id.ToString());
         await cmd.ExecuteNonQueryAsync(ct);

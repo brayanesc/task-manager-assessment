@@ -14,10 +14,11 @@ public sealed class GetTaskByIdUseCase(IUnitOfWork uow)
     {
         var task = await uow.Tasks.GetByIdAsync(taskId, ct);
 
-        // Treat "not found" and "not owned" identically — both surface as 404
-        // to prevent callers from inferring the existence of tasks they don't own.
-        if (task is null || task.UserId != userId)
+        if (task is null)
             return Result<TaskItemResponse>.NotFound("Task not found.");
+
+        if (task.UserId != userId)
+            return Result<TaskItemResponse>.Forbidden("You do not own this task.");
 
         return Result<TaskItemResponse>.Ok(task.ToResponse());
     }

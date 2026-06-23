@@ -55,18 +55,18 @@ public class LoginUseCaseTests
     // ── AC: 401 Unauthorized when credentials invalid ─────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithNonExistentEmail_ReturnsValidationFail()
+    public async Task ExecuteAsync_WithNonExistentEmail_ReturnsUnauthorized()
     {
         _userRepo.Setup(r => r.GetByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
 
         var result = await _sut.ExecuteAsync(new LoginRequest("ghost@example.com", "P@ssword1"), CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(ResultKind.Validation, result.Kind);
+        Assert.Equal(ResultKind.Unauthorized, result.Kind);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithWrongPassword_ReturnsValidationFail()
+    public async Task ExecuteAsync_WithWrongPassword_ReturnsUnauthorized()
     {
         _userRepo.Setup(r => r.GetByEmailAsync("alice@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(Alice);
         _hasher.Setup(h => h.Verify("WrongPassword", "stored_hash")).Returns(false);
@@ -74,7 +74,7 @@ public class LoginUseCaseTests
         var result = await _sut.ExecuteAsync(new LoginRequest("alice@example.com", "WrongPassword"), CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(ResultKind.Validation, result.Kind);
+        Assert.Equal(ResultKind.Unauthorized, result.Kind);
     }
 
     [Fact]

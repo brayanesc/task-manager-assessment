@@ -53,10 +53,10 @@ public class GetTaskByIdUseCaseTests
         Assert.Equal(ResultKind.NotFound, result.Kind);
     }
 
-    // ── AC: task belonging to another user returns NotFound (prevents data enumeration) ─
+    // ── AC: task belonging to another user returns Forbidden ─────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithOtherUsersTask_ReturnsNotFound()
+    public async Task ExecuteAsync_WithOtherUsersTask_ReturnsForbidden()
     {
         var ownerId = Guid.NewGuid();
         var requesterId = Guid.NewGuid();
@@ -67,6 +67,6 @@ public class GetTaskByIdUseCaseTests
         var result = await _sut.ExecuteAsync(taskId, requesterId, CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(ResultKind.NotFound, result.Kind);
+        Assert.Equal(ResultKind.Forbidden, result.Kind);
     }
 }

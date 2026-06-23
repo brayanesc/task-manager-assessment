@@ -61,7 +61,7 @@ public class DeleteTaskUseCaseTests
     // ── Ownership violation ───────────────────────────────────────────────────
 
     [Fact]
-    public async Task ExecuteAsync_WithOtherUsersTask_ReturnsValidationFail()
+    public async Task ExecuteAsync_WithOtherUsersTask_ReturnsForbidden()
     {
         var taskId = Guid.NewGuid();
         SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Their task", null, TaskItemStatus.Todo, Tomorrow, Guid.NewGuid()));
@@ -69,7 +69,7 @@ public class DeleteTaskUseCaseTests
         var result = await _sut.ExecuteAsync(taskId, Guid.NewGuid(), CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(ResultKind.Validation, result.Kind);
+        Assert.Equal(ResultKind.Forbidden, result.Kind);
         _taskRepo.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
         _uow.Verify(u => u.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
     }

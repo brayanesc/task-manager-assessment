@@ -1,32 +1,30 @@
-using Microsoft.Data.Sqlite;
 using TaskManager.Infrastructure.Persistence;
 
 namespace TaskManager.Infrastructure.Tests.TestFixtures;
 
 /// <summary>
-/// Creates a named shared-cache in-memory SQLite database for one test class.
-/// The keep-alive connection prevents SQLite from dropping the in-memory database
-/// between individual test method invocations.
+/// Creates an isolated SQLite file database for one test class.
+/// Using a temp file (rather than shared-cache in-memory) lets UnitOfWork enable
+/// WAL mode without contention, which is required now that CommitAsync() keeps an
+/// open transaction alive for the lifetime of the UnitOfWork scope.
+/// Each fixture instance owns its own file so test classes cannot interfere.
 /// </summary>
 public sealed class DatabaseFixture : IAsyncDisposable
 {
-    private readonly SqliteConnection _keepAlive;
+    private readonly string _dbPath =
+        Path.Combine(Path.GetTempPath(), $"taskmanager_infra_{Guid.NewGuid():N}.db");
 
-    public string ConnectionString { get; }
+    public string ConnectionString => $"Data Source={_dbPath}";
 
     public DatabaseFixture()
     {
-        // Unique DB name per fixture instance so test classes are fully isolated.
-        var dbName = $"test_{Guid.NewGuid():N}";
-        ConnectionString = $"Data Source={dbName};Mode=Memory;Cache=Shared";
-
-        _keepAlive = new SqliteConnection(ConnectionString);
-        _keepAlive.Open();
-
-        // Bootstrap schema + seed synchronously in the constructor.
         var initializer = new DatabaseInitializer(ConnectionString);
         initializer.InitializeAsync().GetAwaiter().GetResult();
     }
 
-    public async ValueTask DisposeAsync() => await _keepAlive.DisposeAsync();
+    public ValueTask DisposeAsync()
+    {
+        try { File.Delete(_dbPath); } catch { /* best-effort */ }
+        return ValueTask.CompletedTask;
+    }
 }

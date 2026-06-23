@@ -19,7 +19,7 @@ public sealed class UpdateTaskUseCase(IUnitOfWork uow, IClock clock)
             return Result<TaskItemResponse>.NotFound($"Task '{taskId}' was not found.");
 
         if (task.UserId != userId)
-            return Result<TaskItemResponse>.Fail("You do not own this task.");
+            return Result<TaskItemResponse>.Forbidden("You do not own this task.");
 
         try
         {
