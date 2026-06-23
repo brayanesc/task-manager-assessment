@@ -23,7 +23,7 @@ public class GetTasksUseCaseTests
     }
 
     private static TaskItem MakeTask(Guid userId) =>
-        TaskItem.Reconstitute(Guid.NewGuid(), "Task", "Desc", TaskItemStatus.Todo, Tomorrow, userId);
+        TaskItem.Reconstitute(Guid.NewGuid(), "Task", "Desc", TaskItemStatus.Todo, Tomorrow, userId, DateTimeOffset.UtcNow);
 
     // ── Happy path ────────────────────────────────────────────────────────────
 
@@ -32,10 +32,10 @@ public class GetTasksUseCaseTests
     {
         var userId = Guid.NewGuid();
         var tasks = new[] { MakeTask(userId), MakeTask(userId) };
-        _taskRepo.Setup(r => r.GetPagedByUserAsync(userId, 1, 10, It.IsAny<CancellationToken>()))
+        _taskRepo.Setup(r => r.GetPagedByUserAsync(userId, 1, 10, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PagedResult<TaskItem>(tasks, 1, 10, 2));
 
-        var result = await _sut.ExecuteAsync(userId, 1, 10, CancellationToken.None);
+        var result = await _sut.ExecuteAsync(userId, 1, 10, ct: CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(2, result.Value!.Items.Count);
@@ -48,10 +48,10 @@ public class GetTasksUseCaseTests
     public async Task ExecuteAsync_WithNoTasks_ReturnsOkEmptyResult()
     {
         var userId = Guid.NewGuid();
-        _taskRepo.Setup(r => r.GetPagedByUserAsync(userId, 1, 10, It.IsAny<CancellationToken>()))
+        _taskRepo.Setup(r => r.GetPagedByUserAsync(userId, 1, 10, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PagedResult<TaskItem>(Array.Empty<TaskItem>(), 1, 10, 0));
 
-        var result = await _sut.ExecuteAsync(userId, 1, 10, CancellationToken.None);
+        var result = await _sut.ExecuteAsync(userId, 1, 10, ct: CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Empty(result.Value!.Items);
@@ -64,10 +64,10 @@ public class GetTasksUseCaseTests
     {
         var userId = Guid.NewGuid();
         var task = MakeTask(userId);
-        _taskRepo.Setup(r => r.GetPagedByUserAsync(userId, 1, 1, It.IsAny<CancellationToken>()))
+        _taskRepo.Setup(r => r.GetPagedByUserAsync(userId, 1, 1, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PagedResult<TaskItem>(new[] { task }, 1, 1, 5));
 
-        var result = await _sut.ExecuteAsync(userId, 1, 1, CancellationToken.None);
+        var result = await _sut.ExecuteAsync(userId, 1, 1, ct: CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Single(result.Value!.Items);
@@ -80,12 +80,12 @@ public class GetTasksUseCaseTests
     public async Task ExecuteAsync_PassesCorrectUserIdToRepository()
     {
         var userId = Guid.NewGuid();
-        _taskRepo.Setup(r => r.GetPagedByUserAsync(userId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _taskRepo.Setup(r => r.GetPagedByUserAsync(userId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PagedResult<TaskItem>(Array.Empty<TaskItem>(), 1, 10, 0));
 
-        await _sut.ExecuteAsync(userId, 1, 10, CancellationToken.None);
+        await _sut.ExecuteAsync(userId, 1, 10, ct: CancellationToken.None);
 
-        _taskRepo.Verify(r => r.GetPagedByUserAsync(userId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        _taskRepo.Verify(r => r.GetPagedByUserAsync(userId, It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // ── Response mapping ──────────────────────────────────────────────────────
@@ -95,11 +95,11 @@ public class GetTasksUseCaseTests
     {
         var userId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        var task = TaskItem.Reconstitute(taskId, "Fix it", "Desc", TaskItemStatus.InProgress, Tomorrow, userId);
-        _taskRepo.Setup(r => r.GetPagedByUserAsync(userId, 1, 10, It.IsAny<CancellationToken>()))
+        var task = TaskItem.Reconstitute(taskId, "Fix it", "Desc", TaskItemStatus.InProgress, Tomorrow, userId, DateTimeOffset.UtcNow);
+        _taskRepo.Setup(r => r.GetPagedByUserAsync(userId, 1, 10, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PagedResult<TaskItem>(new[] { task }, 1, 10, 1));
 
-        var result = await _sut.ExecuteAsync(userId, 1, 10, CancellationToken.None);
+        var result = await _sut.ExecuteAsync(userId, 1, 10, ct: CancellationToken.None);
 
         var item = result.Value!.Items[0];
         Assert.Equal(taskId, item.Id);

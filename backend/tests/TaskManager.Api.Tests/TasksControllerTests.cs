@@ -256,6 +256,6 @@ public sealed class TasksControllerTests(TaskApiFactory factory)
 
     private sealed record AuthBody(string Token, string Email);
     private sealed record TaskBody(Guid Id, string Title, string Description,
-        string Status, string DueDate, Guid UserId);
+        string Status, string DueDate, Guid UserId, DateTimeOffset UpdatedAt);
     private sealed record PagedBody(List<TaskBody> Items, int Page, int PageSize, int TotalCount);
 }

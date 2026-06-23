@@ -28,7 +28,7 @@ public class GetTaskByIdUseCaseTests
     {
         var userId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        var task = TaskItem.Reconstitute(taskId, "My task", "Desc", TaskItemStatus.Todo, Tomorrow, userId);
+        var task = TaskItem.Reconstitute(taskId, "My task", "Desc", TaskItemStatus.Todo, Tomorrow, userId, DateTimeOffset.UtcNow);
         _taskRepo.Setup(r => r.GetByIdAsync(taskId, It.IsAny<CancellationToken>())).ReturnsAsync(task);
 
         var result = await _sut.ExecuteAsync(taskId, userId, CancellationToken.None);
@@ -61,7 +61,7 @@ public class GetTaskByIdUseCaseTests
         var ownerId = Guid.NewGuid();
         var requesterId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        var task = TaskItem.Reconstitute(taskId, "Their task", null, TaskItemStatus.Todo, Tomorrow, ownerId);
+        var task = TaskItem.Reconstitute(taskId, "Their task", null, TaskItemStatus.Todo, Tomorrow, ownerId, DateTimeOffset.UtcNow);
         _taskRepo.Setup(r => r.GetByIdAsync(taskId, It.IsAny<CancellationToken>())).ReturnsAsync(task);
 
         var result = await _sut.ExecuteAsync(taskId, requesterId, CancellationToken.None);

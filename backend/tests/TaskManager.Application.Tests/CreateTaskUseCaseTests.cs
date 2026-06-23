@@ -42,7 +42,7 @@ public class CreateTaskUseCaseTests
         Assert.Equal("Fix login bug", result.Value!.Title);
         Assert.Equal("Desc", result.Value.Description);
         Assert.Equal(userId, result.Value.UserId);
-        Assert.Equal(TaskItemStatus.Todo, result.Value.Status); // domain forces Todo on create
+        Assert.Equal(TaskItemStatus.Done, result.Value.Status); // status from request is honoured
         Assert.Equal(Tomorrow, result.Value.DueDate);
         Assert.NotEqual(Guid.Empty, result.Value.Id);
     }

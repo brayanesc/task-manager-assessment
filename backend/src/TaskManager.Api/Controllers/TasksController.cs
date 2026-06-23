@@ -22,15 +22,18 @@ public sealed class TasksController(
                    ?? User.FindFirstValue("sub")
                    ?? throw new InvalidOperationException("User ID claim not found."));
 
-    // GET /api/tasks?page=1&pageSize=10
+    // GET /api/tasks?page=1&pageSize=10&status=Todo&search=keyword
     [HttpGet]
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
+        [FromQuery] string? status = null,
+        [FromQuery] string? search = null,
         CancellationToken ct = default)
     {
         pageSize = Math.Min(pageSize, 50);
-        var result = await getTasks.ExecuteAsync(CurrentUserId, page, pageSize, ct);
+        var result = await getTasks.ExecuteAsync(
+            CurrentUserId, page, pageSize, status, search, ct);
         if (!result.IsSuccess) return result.ToErrorResult();
         return Ok(result.Value);
     }

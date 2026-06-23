@@ -14,7 +14,7 @@ internal sealed class TaskRepository(SqliteConnection connection, Func<SqliteTra
     {
         await using var cmd = connection.CreateCommand();
         cmd.Transaction = getTransaction();
-        cmd.CommandText = "SELECT id, title, description, status, due_date, user_id FROM Tasks WHERE id = @id";
+        cmd.CommandText = "SELECT id, title, description, status, due_date, user_id, updated_at FROM Tasks WHERE id = @id";
         cmd.Parameters.AddWithValue("@id", id.ToString());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -22,26 +22,43 @@ internal sealed class TaskRepository(SqliteConnection connection, Func<SqliteTra
     }
 
     public async Task<PagedResult<TaskItem>> GetPagedByUserAsync(
-        Guid userId, int page, int pageSize, CancellationToken ct = default)
+        Guid userId, int page, int pageSize,
+        string? statusFilter = null, string? search = null,
+        CancellationToken ct = default)
     {
         var offset = (page - 1) * pageSize;
 
+        // Build shared WHERE fragment
+        var where = new System.Text.StringBuilder("WHERE user_id = @userId");
+        if (!string.IsNullOrWhiteSpace(statusFilter))
+            where.Append(" AND status = @status");
+        if (!string.IsNullOrWhiteSpace(search))
+            where.Append(" AND (title LIKE @search OR description LIKE @search)");
+
         await using var countCmd = connection.CreateCommand();
         countCmd.Transaction = getTransaction();
-        countCmd.CommandText = "SELECT COUNT(*) FROM Tasks WHERE user_id = @userId";
+        countCmd.CommandText = $"SELECT COUNT(*) FROM Tasks {where}";
         countCmd.Parameters.AddWithValue("@userId", userId.ToString());
+        if (!string.IsNullOrWhiteSpace(statusFilter))
+            countCmd.Parameters.AddWithValue("@status", statusFilter);
+        if (!string.IsNullOrWhiteSpace(search))
+            countCmd.Parameters.AddWithValue("@search", $"%{search}%");
         var totalCount = (long)(await countCmd.ExecuteScalarAsync(ct))!;
 
         await using var cmd = connection.CreateCommand();
         cmd.Transaction = getTransaction();
-        cmd.CommandText = """
-            SELECT id, title, description, status, due_date, user_id
+        cmd.CommandText = $"""
+            SELECT id, title, description, status, due_date, user_id, updated_at
             FROM Tasks
-            WHERE user_id = @userId
-            ORDER BY due_date ASC
+            {where}
+            ORDER BY created_at DESC
             LIMIT @pageSize OFFSET @offset
             """;
         cmd.Parameters.AddWithValue("@userId", userId.ToString());
+        if (!string.IsNullOrWhiteSpace(statusFilter))
+            cmd.Parameters.AddWithValue("@status", statusFilter);
+        if (!string.IsNullOrWhiteSpace(search))
+            cmd.Parameters.AddWithValue("@search", $"%{search}%");
         cmd.Parameters.AddWithValue("@pageSize", pageSize);
         cmd.Parameters.AddWithValue("@offset", offset);
 
@@ -58,10 +75,13 @@ internal sealed class TaskRepository(SqliteConnection connection, Func<SqliteTra
         await using var cmd = connection.CreateCommand();
         cmd.Transaction = getTransaction();
         cmd.CommandText = """
-            INSERT INTO Tasks (id, title, description, status, due_date, user_id)
-            VALUES (@id, @title, @description, @status, @dueDate, @userId)
+            INSERT INTO Tasks (id, title, description, status, due_date, user_id, created_at, updated_at)
+            VALUES (@id, @title, @description, @status, @dueDate, @userId, @createdAt, @updatedAt)
             """;
         AddTaskParameters(cmd, task);
+        var now = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        cmd.Parameters.AddWithValue("@createdAt", now);
+        cmd.Parameters.AddWithValue("@updatedAt", now);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -71,10 +91,12 @@ internal sealed class TaskRepository(SqliteConnection connection, Func<SqliteTra
         cmd.Transaction = getTransaction();
         cmd.CommandText = """
             UPDATE Tasks
-            SET title = @title, description = @description, status = @status, due_date = @dueDate
+            SET title = @title, description = @description, status = @status, due_date = @dueDate,
+                updated_at = @updatedAt
             WHERE id = @id
             """;
         AddTaskParameters(cmd, task);
+        cmd.Parameters.AddWithValue("@updatedAt", task.UpdatedAt.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -104,6 +126,7 @@ internal sealed class TaskRepository(SqliteConnection connection, Func<SqliteTra
             r.GetString(r.GetOrdinal("description")),
             Enum.Parse<TaskItemStatus>(r.GetString(r.GetOrdinal("status"))),
             DateOnly.ParseExact(r.GetString(r.GetOrdinal("due_date")), "yyyy-MM-dd"),
-            Guid.Parse(r.GetString(r.GetOrdinal("user_id")))
+            Guid.Parse(r.GetString(r.GetOrdinal("user_id"))),
+            DateTimeOffset.Parse(r.GetString(r.GetOrdinal("updated_at")))
         );
 }

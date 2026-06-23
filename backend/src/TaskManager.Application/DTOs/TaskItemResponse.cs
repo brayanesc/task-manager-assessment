@@ -8,4 +8,5 @@ public sealed record TaskItemResponse(
     string Description,
     TaskItemStatus Status,
     DateOnly DueDate,
-    Guid UserId);
+    Guid UserId,
+    DateTimeOffset UpdatedAt);

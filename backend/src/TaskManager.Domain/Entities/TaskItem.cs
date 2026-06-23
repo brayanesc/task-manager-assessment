@@ -11,6 +11,7 @@ public sealed class TaskItem
     public TaskItemStatus Status { get; private set; }
     public DateOnly DueDate { get; private set; }
     public Guid UserId { get; private set; }
+    public DateTimeOffset UpdatedAt { get; private set; }
 
     private TaskItem() { }
 
@@ -19,7 +20,8 @@ public sealed class TaskItem
         string? description,
         DateOnly dueDate,
         Guid userId,
-        DateOnly today)
+        DateOnly today,
+        TaskItemStatus status = TaskItemStatus.Todo)
     {
         Validate(title, dueDate, today);
         return new TaskItem
@@ -27,9 +29,10 @@ public sealed class TaskItem
             Id = Guid.NewGuid(),
             Title = title,
             Description = description ?? string.Empty,
-            Status = TaskItemStatus.Todo,
+            Status = status,
             DueDate = dueDate,
-            UserId = userId
+            UserId = userId,
+            UpdatedAt = DateTimeOffset.UtcNow
         };
     }
 
@@ -41,7 +44,8 @@ public sealed class TaskItem
         string? description,
         TaskItemStatus status,
         DateOnly dueDate,
-        Guid userId) =>
+        Guid userId,
+        DateTimeOffset updatedAt) =>
         new()
         {
             Id = id,
@@ -49,7 +53,8 @@ public sealed class TaskItem
             Description = description ?? string.Empty,
             Status = status,
             DueDate = dueDate,
-            UserId = userId
+            UserId = userId,
+            UpdatedAt = updatedAt
         };
 
     public void Update(
@@ -64,6 +69,7 @@ public sealed class TaskItem
         Description = description ?? string.Empty;
         Status = status;
         DueDate = dueDate;
+        UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     private static void Validate(string title, DateOnly dueDate, DateOnly today)

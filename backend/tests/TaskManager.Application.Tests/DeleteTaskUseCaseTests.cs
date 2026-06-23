@@ -34,7 +34,7 @@ public class DeleteTaskUseCaseTests
     {
         var userId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "My task", null, TaskItemStatus.Todo, Tomorrow, userId));
+        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "My task", null, TaskItemStatus.Todo, Tomorrow, userId, DateTimeOffset.UtcNow));
 
         var result = await _sut.ExecuteAsync(taskId, userId, CancellationToken.None);
 
@@ -64,7 +64,7 @@ public class DeleteTaskUseCaseTests
     public async Task ExecuteAsync_WithOtherUsersTask_ReturnsForbidden()
     {
         var taskId = Guid.NewGuid();
-        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Their task", null, TaskItemStatus.Todo, Tomorrow, Guid.NewGuid()));
+        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Their task", null, TaskItemStatus.Todo, Tomorrow, Guid.NewGuid(), DateTimeOffset.UtcNow));
 
         var result = await _sut.ExecuteAsync(taskId, Guid.NewGuid(), CancellationToken.None);
 

@@ -39,7 +39,7 @@ public class UpdateTaskUseCaseTests
     {
         var userId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Original", "Old", TaskItemStatus.Todo, Tomorrow, userId));
+        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Original", "Old", TaskItemStatus.Todo, Tomorrow, userId, DateTimeOffset.UtcNow));
 
         var result = await _sut.ExecuteAsync(
             taskId, new TaskItemRequest("Updated", "New", TaskItemStatus.InProgress, Tomorrow), userId, CancellationToken.None);
@@ -57,7 +57,7 @@ public class UpdateTaskUseCaseTests
     {
         var userId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.InProgress, PastDate, userId));
+        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.InProgress, PastDate, userId, DateTimeOffset.UtcNow));
 
         var result = await _sut.ExecuteAsync(
             taskId, new TaskItemRequest("Updated", null, TaskItemStatus.Done, PastDate), userId, CancellationToken.None);
@@ -71,7 +71,7 @@ public class UpdateTaskUseCaseTests
     {
         var userId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.Todo, Tomorrow, userId));
+        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.Todo, Tomorrow, userId, DateTimeOffset.UtcNow));
 
         var newDate = Tomorrow.AddDays(7);
         var result = await _sut.ExecuteAsync(
@@ -103,7 +103,7 @@ public class UpdateTaskUseCaseTests
     public async Task ExecuteAsync_WithOtherUsersTask_ReturnsForbidden()
     {
         var taskId = Guid.NewGuid();
-        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.Todo, Tomorrow, Guid.NewGuid()));
+        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.Todo, Tomorrow, Guid.NewGuid(), DateTimeOffset.UtcNow));
 
         var result = await _sut.ExecuteAsync(
             taskId, new TaskItemRequest("Task", null, TaskItemStatus.Todo, Tomorrow),
@@ -124,7 +124,7 @@ public class UpdateTaskUseCaseTests
     {
         var userId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.Todo, Tomorrow, userId));
+        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.Todo, Tomorrow, userId, DateTimeOffset.UtcNow));
 
         var result = await _sut.ExecuteAsync(
             taskId, new TaskItemRequest(title, null, TaskItemStatus.Todo, Tomorrow), userId, CancellationToken.None);
@@ -140,7 +140,7 @@ public class UpdateTaskUseCaseTests
     {
         var userId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.Todo, Tomorrow, userId));
+        SetupGetById(taskId, TaskItem.Reconstitute(taskId, "Task", null, TaskItemStatus.Todo, Tomorrow, userId, DateTimeOffset.UtcNow));
 
         var result = await _sut.ExecuteAsync(
             taskId, new TaskItemRequest("Task", null, TaskItemStatus.Todo, Today.AddDays(-1)), userId, CancellationToken.None);

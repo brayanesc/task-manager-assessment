@@ -18,6 +18,7 @@ public sealed class DatabaseInitializer(string connectionString)
 
         await ApplyWalPragmaAsync(conn, ct);
         await CreateSchemaAsync(conn, ct);
+        await MigrateAsync(conn, ct);
         await SeedAsync(conn, ct);
     }
 
@@ -45,11 +46,55 @@ public sealed class DatabaseInitializer(string connectionString)
                 description TEXT NOT NULL DEFAULT '',
                 status      TEXT NOT NULL DEFAULT 'Todo',
                 due_date    TEXT NOT NULL,
-                user_id     TEXT NOT NULL REFERENCES Users(id) ON DELETE CASCADE
+                user_id     TEXT NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
+                created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
             );
             CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON Tasks(user_id);
             """;
         await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
+    /// Idempotent migrations for databases created before schema additions.
+    /// Each ALTER TABLE is wrapped in a try/catch — SQLite raises an error
+    /// if the column already exists, which we safely ignore.
+    /// </summary>
+    private static async Task MigrateAsync(SqliteConnection conn, CancellationToken ct)
+    {
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            // Existing rows receive the oldest possible timestamp so they sort to the bottom.
+            cmd.CommandText = """
+                ALTER TABLE Tasks
+                ADD COLUMN created_at TEXT NOT NULL DEFAULT '1900-01-01T00:00:00.000Z'
+                """;
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException ex) when (ex.Message.Contains("duplicate column name"))
+        {
+            // Column already present — nothing to do.
+        }
+
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                ALTER TABLE Tasks
+                ADD COLUMN updated_at TEXT NOT NULL DEFAULT '1900-01-01T00:00:00.000Z'
+                """;
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException ex) when (ex.Message.Contains("duplicate column name"))
+        {
+            // Column already present — nothing to do.
+        }
+
+        // Ensure index exists regardless of whether ALTER TABLE ran.
+        await using var idxCmd = conn.CreateCommand();
+        idxCmd.CommandText = "CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON Tasks(created_at)";
+        await idxCmd.ExecuteNonQueryAsync(ct);
     }
 
     private static async Task SeedAsync(SqliteConnection conn, CancellationToken ct)

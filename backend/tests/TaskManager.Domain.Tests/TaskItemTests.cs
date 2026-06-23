@@ -135,7 +135,7 @@ public class TaskItemTests
     {
         var id = Guid.NewGuid();
         var task = TaskItem.Reconstitute(id, "Old task", "Desc",
-            TaskItemStatus.InProgress, Yesterday, OwnerId);
+            TaskItemStatus.InProgress, Yesterday, OwnerId, DateTimeOffset.UtcNow);
 
         Assert.Equal(id, task.Id);
         Assert.Equal(Yesterday, task.DueDate);
