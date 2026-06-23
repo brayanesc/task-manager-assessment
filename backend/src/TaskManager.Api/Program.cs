@@ -114,7 +114,11 @@ app.MapScalarApiReference(opts =>
 });
 
 app.UseCors("AllowAll");
-app.UseHttpsRedirection();
+// Skip HTTPS redirect in Production: nginx (or another reverse proxy) handles
+// TLS termination externally. Redirecting inside the container would send every
+// proxied HTTP request into an infinite redirect loop.
+if (!app.Environment.IsProduction())
+    app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

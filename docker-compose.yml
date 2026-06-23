@@ -1,0 +1,58 @@
+services:
+
+  # ── Backend: ASP.NET Core 10 API ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      # Separate target lets you stop at the build stage for debugging:
+      # docker build --target build ./backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5111
+      # ASP.NET Core reads nested keys via __ separator
+      ConnectionStrings__Default: Data Source=/data/taskmanager.db
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER:-taskmanager}
+      Jwt__Audience: ${JWT_AUDIENCE:-taskmanager}
+      Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-60}
+    volumes:
+      # Named volume keeps the SQLite database across container restarts
+      - taskmanager-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5111/openapi/v1.json"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - taskmanager-net
+    # Uncomment to access the API directly from the host (e.g. Scalar UI, curl):
+    # ports:
+    #   - "${BACKEND_PORT:-5111}:5111"
+
+  # ── Frontend: Angular 18 served by nginx ────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      # Map host port to nginx. Override with FRONTEND_PORT in .env
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy   # wait until backend healthcheck passes
+    restart: unless-stopped
+    networks:
+      - taskmanager-net
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  taskmanager-data:
+    # Remove the volume to reset the database:  docker compose down -v
+
+# ── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  taskmanager-net:
+    driver: bridge
