@@ -16,7 +16,7 @@ public sealed class CreateTaskUseCase(IUnitOfWork uow, IClock clock)
     {
         try
         {
-            var task = TaskItem.Create(request.Title, request.Description, request.DueDate, userId, clock.Today, request.Status);
+            var task = TaskItem.Create(request.Title, request.Description, request.DueDate, userId, clock.Today, request.Status, request.Priority);
             await uow.Tasks.CreateAsync(task, ct);
             await uow.CommitAsync(ct);
             return Result<TaskItemResponse>.Ok(task.ToResponse());

@@ -47,6 +47,7 @@ public sealed class DatabaseInitializer(string connectionString)
                 status      TEXT NOT NULL DEFAULT 'Todo',
                 due_date    TEXT NOT NULL,
                 user_id     TEXT NOT NULL REFERENCES Users(id) ON DELETE CASCADE,
+                priority    TEXT NOT NULL DEFAULT 'Medium',
                 created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
                 updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
             );
@@ -91,7 +92,21 @@ public sealed class DatabaseInitializer(string connectionString)
             // Column already present — nothing to do.
         }
 
-        // Ensure index exists regardless of whether ALTER TABLE ran.
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                ALTER TABLE Tasks
+                ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'
+                """;
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException ex) when (ex.Message.Contains("duplicate column name"))
+        {
+            // Column already present — nothing to do.
+        }
+
+        // Ensure indexes exist regardless of whether ALTER TABLE ran.
         await using var idxCmd = conn.CreateCommand();
         idxCmd.CommandText = "CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON Tasks(created_at)";
         await idxCmd.ExecuteNonQueryAsync(ct);
@@ -114,10 +129,10 @@ public sealed class DatabaseInitializer(string connectionString)
 
         await using var taskCmd = conn.CreateCommand();
         taskCmd.CommandText = """
-            INSERT OR IGNORE INTO Tasks (id, title, description, status, due_date, user_id) VALUES
-                (@t1id, 'Set up project repository', 'Create the monorepo with backend and frontend folders', 'Done',    '2099-01-01', @uid),
-                (@t2id, 'Implement authentication',  'JWT login and registration endpoints',                  'InProgress','2099-06-01', @uid),
-                (@t3id, 'Write integration tests',   'Cover repositories with real SQLite tests',             'Todo',      '2099-12-01', @uid)
+            INSERT OR IGNORE INTO Tasks (id, title, description, status, due_date, user_id, priority) VALUES
+                (@t1id, 'Set up project repository', 'Create the monorepo with backend and frontend folders', 'Done',    '2099-01-01', @uid, 'Medium'),
+                (@t2id, 'Implement authentication',  'JWT login and registration endpoints',                  'InProgress','2099-06-01', @uid, 'High'),
+                (@t3id, 'Write integration tests',   'Cover repositories with real SQLite tests',             'Todo',      '2099-12-01', @uid, 'Medium')
             """;
         taskCmd.Parameters.AddWithValue("@t1id", SeedTask1Id);
         taskCmd.Parameters.AddWithValue("@t2id", SeedTask2Id);

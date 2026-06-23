@@ -27,7 +27,7 @@ public sealed class UpdateTaskUseCase(IUnitOfWork uow, IClock clock)
             // so the domain's dueDate >= today check is trivially satisfied for
             // tasks that were created with a date that has since passed.
             var today = request.DueDate == task.DueDate ? request.DueDate : clock.Today;
-            task.Update(request.Title, request.Description, request.Status, request.DueDate, today);
+            task.Update(request.Title, request.Description, request.Status, request.DueDate, today, request.Priority);
         }
         catch (DomainException ex)
         {

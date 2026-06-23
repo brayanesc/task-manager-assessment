@@ -6,4 +6,5 @@ public sealed record TaskItemRequest(
     string Title,
     string? Description,
     TaskItemStatus Status,
-    DateOnly DueDate);
+    DateOnly DueDate,
+    TaskPriority Priority = TaskPriority.Medium);

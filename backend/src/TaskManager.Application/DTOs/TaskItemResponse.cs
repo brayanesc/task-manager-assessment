@@ -7,6 +7,7 @@ public sealed record TaskItemResponse(
     string Title,
     string Description,
     TaskItemStatus Status,
+    TaskPriority Priority,
     DateOnly DueDate,
     Guid UserId,
     DateTimeOffset UpdatedAt);

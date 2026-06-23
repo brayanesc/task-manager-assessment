@@ -9,6 +9,7 @@ public sealed class TaskItem
     public string Title { get; private set; } = string.Empty;
     public string Description { get; private set; } = string.Empty;
     public TaskItemStatus Status { get; private set; }
+    public TaskPriority Priority { get; private set; }
     public DateOnly DueDate { get; private set; }
     public Guid UserId { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -21,7 +22,8 @@ public sealed class TaskItem
         DateOnly dueDate,
         Guid userId,
         DateOnly today,
-        TaskItemStatus status = TaskItemStatus.Todo)
+        TaskItemStatus status = TaskItemStatus.Todo,
+        TaskPriority priority = TaskPriority.Medium)
     {
         Validate(title, dueDate, today);
         return new TaskItem
@@ -30,6 +32,7 @@ public sealed class TaskItem
             Title = title,
             Description = description ?? string.Empty,
             Status = status,
+            Priority = priority,
             DueDate = dueDate,
             UserId = userId,
             UpdatedAt = DateTimeOffset.UtcNow
@@ -45,13 +48,15 @@ public sealed class TaskItem
         TaskItemStatus status,
         DateOnly dueDate,
         Guid userId,
-        DateTimeOffset updatedAt) =>
+        DateTimeOffset updatedAt,
+        TaskPriority priority = TaskPriority.Medium) =>
         new()
         {
             Id = id,
             Title = title,
             Description = description ?? string.Empty,
             Status = status,
+            Priority = priority,
             DueDate = dueDate,
             UserId = userId,
             UpdatedAt = updatedAt
@@ -62,12 +67,14 @@ public sealed class TaskItem
         string? description,
         TaskItemStatus status,
         DateOnly dueDate,
-        DateOnly today)
+        DateOnly today,
+        TaskPriority priority = TaskPriority.Medium)
     {
         Validate(title, dueDate, today);
         Title = title;
         Description = description ?? string.Empty;
         Status = status;
+        Priority = priority;
         DueDate = dueDate;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
