@@ -14,6 +14,11 @@ const STATUS_OPTIONS = ['', 'Todo', 'InProgress', 'Done'] as const;
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50] as const;
 type StatusOption = (typeof STATUS_OPTIONS)[number];
 
+type SortColumn = 'title' | 'priority' | 'status' | 'dueDate';
+type SortDir    = 'asc' | 'desc';
+// 3-state cycle: none → asc → desc → none
+const SORT_CYCLE: (SortDir | null)[] = [null, 'asc', 'desc'];
+
 @Component({
   selector: 'app-task-list',
   standalone: true,
@@ -94,6 +99,25 @@ type StatusOption = (typeof STATUS_OPTIONS)[number];
       </div>
     }
 
+    <!-- Sort header row -->
+    @if (!loading() && tasks().length > 0) {
+      <div class="hidden sm:grid grid-cols-4 gap-3 px-3 mb-1 text-xs font-semibold uppercase tracking-wide opacity-50">
+        @for (col of sortColumns; track col.key) {
+          <button
+            class="flex items-center gap-1 hover:opacity-100 transition-opacity text-left"
+            (click)="toggleSort(col.key)"
+          >
+            {{ col.label }}
+            <span class="text-[10px] leading-none">
+              @if (sortBy() === col.key && sortDir() === 'asc')  { ▲ }
+              @else if (sortBy() === col.key && sortDir() === 'desc') { ▼ }
+              @else { <span class="opacity-30">⬍</span> }
+            </span>
+          </button>
+        }
+      </div>
+    }
+
     <!-- Task grid -->
     @if (!loading() && tasks().length > 0) {
       <div class="grid gap-3 sm:grid-cols-2">
@@ -139,10 +163,21 @@ export class TaskListComponent implements OnInit, OnDestroy {
   readonly pageSizeOptions = PAGE_SIZE_OPTIONS;
   readonly searchCtrl = new FormControl('', { nonNullable: true });
 
+  readonly sortColumns: { key: SortColumn; label: string }[] = [
+    { key: 'title',    label: 'Task'     },
+    { key: 'priority', label: 'Priority' },
+    { key: 'status',   label: 'Status'   },
+    { key: 'dueDate',  label: 'Due'      },
+  ];
+
   // Filter state
   readonly activeStatus = signal<StatusOption>('');
   readonly pageSize     = signal<number>(10);
   readonly currentPage  = signal(1);
+
+  // Sort state (null = no explicit sort → default created_at DESC)
+  readonly sortBy  = signal<SortColumn | null>(null);
+  readonly sortDir = signal<SortDir | null>(null);
 
   // Result state
   readonly tasks      = signal<TaskItem[]>([]);
@@ -171,13 +206,28 @@ export class TaskListComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void { this.searchSub?.unsubscribe(); }
 
+  /** Cycle sort for a column: none → asc → desc → none */
+  toggleSort(col: SortColumn): void {
+    const current = this.sortBy() === col ? this.sortDir() : null;
+    const idx = SORT_CYCLE.indexOf(current);
+    const next = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length];
+    this.sortBy.set(next === null ? null : col);
+    this.sortDir.set(next);
+    this.currentPage.set(1);
+    this.fetch();
+  }
+
   private fetch(): void {
     this.loading.set(true);
+    const sortBy  = this.sortBy();
+    const sortDir = this.sortDir();
     this.taskSvc.getTasks(
       this.currentPage(),
       this.pageSize(),
       this.activeStatus() || undefined,
       this.searchCtrl.value.trim() || undefined,
+      sortBy  ?? undefined,
+      sortDir ?? undefined,
     ).subscribe({
       next: result => {
         this.tasks.set(result.items);

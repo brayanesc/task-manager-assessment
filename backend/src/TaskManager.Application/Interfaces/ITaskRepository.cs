@@ -9,6 +9,7 @@ public interface ITaskRepository
     Task<PagedResult<TaskItem>> GetPagedByUserAsync(
         Guid userId, int page, int pageSize,
         string? statusFilter = null, string? search = null,
+        string? sortBy = null, bool isDescending = false,
         CancellationToken ct = default);
     Task CreateAsync(TaskItem task, CancellationToken ct = default);
     Task UpdateAsync(TaskItem task, CancellationToken ct = default);

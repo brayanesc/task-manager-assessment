@@ -21,9 +21,19 @@ internal sealed class TaskRepository(SqliteConnection connection, Func<SqliteTra
         return await reader.ReadAsync(ct) ? Map(reader) : null;
     }
 
+    // Allowlist prevents SQL injection via the sortBy parameter.
+    private static readonly Dictionary<string, string> SortColumnMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["title"]    = "title",
+        ["priority"] = "priority",
+        ["status"]   = "status",
+        ["dueDate"]  = "due_date",
+    };
+
     public async Task<PagedResult<TaskItem>> GetPagedByUserAsync(
         Guid userId, int page, int pageSize,
         string? statusFilter = null, string? search = null,
+        string? sortBy = null, bool isDescending = false,
         CancellationToken ct = default)
     {
         var offset = (page - 1) * pageSize;
@@ -34,6 +44,16 @@ internal sealed class TaskRepository(SqliteConnection connection, Func<SqliteTra
             where.Append(" AND status = @status");
         if (!string.IsNullOrWhiteSpace(search))
             where.Append(" AND (title LIKE @search OR description LIKE @search)");
+
+        // Resolve ORDER BY — fall back to created_at DESC when no sort requested.
+        var orderCol = (!string.IsNullOrWhiteSpace(sortBy) && SortColumnMap.TryGetValue(sortBy, out var col))
+            ? col
+            : "created_at";
+        var direction = isDescending ? "DESC" : "ASC";
+        // When an explicit column is chosen add created_at as a stable tiebreaker.
+        var orderClause = orderCol == "created_at"
+            ? "ORDER BY created_at DESC"
+            : $"ORDER BY {orderCol} {direction}, created_at DESC";
 
         await using var countCmd = connection.CreateCommand();
         countCmd.Transaction = getTransaction();
@@ -51,7 +71,7 @@ internal sealed class TaskRepository(SqliteConnection connection, Func<SqliteTra
             SELECT id, title, description, status, due_date, user_id, updated_at, priority
             FROM Tasks
             {where}
-            ORDER BY created_at DESC
+            {orderClause}
             LIMIT @pageSize OFFSET @offset
             """;
         cmd.Parameters.AddWithValue("@userId", userId.ToString());

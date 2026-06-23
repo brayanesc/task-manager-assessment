@@ -13,6 +13,8 @@ public sealed class GetTasksUseCase(IUnitOfWork uow)
         int pageSize,
         string? statusFilter = null,
         string? search = null,
+        string? sortBy = null,
+        bool isDescending = false,
         CancellationToken ct = default)
     {
         if (page < 1) page = 1;
@@ -20,7 +22,7 @@ public sealed class GetTasksUseCase(IUnitOfWork uow)
         if (pageSize > 100) pageSize = 100;
 
         var paged = await uow.Tasks.GetPagedByUserAsync(
-            userId, page, pageSize, statusFilter, search, ct);
+            userId, page, pageSize, statusFilter, search, sortBy, isDescending, ct);
         var items = paged.Items.Select(t => t.ToResponse()).ToList();
         return Result<PagedResult<TaskItemResponse>>.Ok(
             new PagedResult<TaskItemResponse>(items, paged.Page, paged.PageSize, paged.TotalCount));

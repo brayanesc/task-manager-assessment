@@ -14,10 +14,14 @@ export class TaskService {
     pageSize = 5,
     status?: string,
     search?: string,
+    sortBy?: string,
+    sortDir?: 'asc' | 'desc',
   ): Observable<PagedResult<TaskItem>> {
     let params = new HttpParams().set('page', page).set('pageSize', pageSize);
     if (status) params = params.set('status', status);
     if (search?.trim()) params = params.set('search', search.trim());
+    if (sortBy) params = params.set('sortBy', sortBy);
+    if (sortDir) params = params.set('sortDir', sortDir);
     return this.http.get<PagedResult<TaskItem>>(this.base, { params });
   }
 

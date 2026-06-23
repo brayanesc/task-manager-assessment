@@ -409,10 +409,27 @@ const NAV_FILTERS: { key: string; label: string; dot: string }[] = [
             display:grid;grid-template-columns:1fr 130px 120px 130px 44px;
             padding:10px 16px;border-bottom:1px solid var(--border);
             font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.07em;
+            align-items:center;
           ">
-            <span>Task</span><span>Priority</span><span>Status</span><span>Due</span><span></span>
+            @for (hdr of listHeaders; track hdr.col) {
+              <button
+                (click)="cycleSort(hdr.col)"
+                style="
+                  background:none;border:none;cursor:pointer;padding:0;
+                  font:inherit;font-size:11px;font-weight:700;
+                  letter-spacing:.07em;text-transform:uppercase;
+                  display:flex;align-items:center;gap:4px;
+                  text-align:left;
+                "
+                [style.color]="sortCol() === hdr.col ? 'var(--accent)' : 'var(--faint)'"
+              >
+                {{ hdr.label }}
+                <span style="font-size:10px;opacity:.8;">{{ sortIcon(hdr.col) }}</span>
+              </button>
+            }
+            <span></span>
           </div>
-          @for (task of pagedTasks(); track task.id) {
+          @for (task of sortedPagedTasks(); track task.id) {
             <div
               (click)="detailTask.set(task)"
               style="
@@ -892,8 +909,14 @@ export class TaskShellComponent implements OnInit {
   private readonly datePipe = inject(DatePipe);
 
   // ── Exposed metadata constants ─────────────────────────────────────────────
-  readonly navFilters = NAV_FILTERS;
-  readonly columns    = COLUMNS;
+  readonly navFilters  = NAV_FILTERS;
+  readonly columns     = COLUMNS;
+  readonly listHeaders: { col: 'title' | 'priority' | 'status' | 'dueDate'; label: string }[] = [
+    { col: 'title',    label: 'Task'     },
+    { col: 'priority', label: 'Priority' },
+    { col: 'status',   label: 'Status'   },
+    { col: 'dueDate',  label: 'Due'      },
+  ];
   readonly views      = [
     { key: 'board' as const, label: 'Board' },
     { key: 'list'  as const, label: 'List'  },
@@ -916,6 +939,8 @@ export class TaskShellComponent implements OnInit {
   readonly saving     = signal(false);
   readonly deleting   = signal(false);
   readonly reloading  = signal(false);
+  readonly sortCol    = signal<'title' | 'priority' | 'status' | 'dueDate' | null>(null);
+  readonly sortDir    = signal<'asc' | 'desc'>('asc');
 
   // ── Computed ───────────────────────────────────────────────────────────────
   readonly isDark      = computed(() => this.theme() === 'dark');
@@ -940,6 +965,25 @@ export class TaskShellComponent implements OnInit {
   readonly pagedTasks = computed(() => {
     const start = (this.page() - 1) * this.perPage();
     return this.visibleTasks().slice(start, start + this.perPage());
+  });
+
+  readonly sortedPagedTasks = computed(() => {
+    const tasks = this.pagedTasks();
+    const col   = this.sortCol();
+    const dir   = this.sortDir();
+    if (!col) return tasks;
+
+    const PRIORITY_ORDER: Record<TaskPriority, number> = { Low: 0, Medium: 1, High: 2 };
+    const STATUS_ORDER:   Record<TaskStatus,   number> = { Todo: 0, InProgress: 1, Done: 2 };
+
+    return [...tasks].sort((a, b) => {
+      let cmp = 0;
+      if (col === 'title')    cmp = a.title.localeCompare(b.title);
+      if (col === 'priority') cmp = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+      if (col === 'status')   cmp = STATUS_ORDER[a.status]     - STATUS_ORDER[b.status];
+      if (col === 'dueDate')  cmp = a.dueDate.localeCompare(b.dueDate);
+      return dir === 'asc' ? cmp : -cmp;
+    });
   });
 
   readonly boardColumns = computed(() =>
@@ -1186,6 +1230,22 @@ export class TaskShellComponent implements OnInit {
   dueDateDisplay(task: TaskItem): string {
     const formatted = this.datePipe.transform(task.dueDate, 'MMM d, yyyy') ?? task.dueDate;
     return this.isOverdue(task) ? `Overdue · ${formatted}` : formatted;
+  }
+
+  cycleSort(col: 'title' | 'priority' | 'status' | 'dueDate'): void {
+    if (this.sortCol() !== col) {
+      this.sortCol.set(col);
+      this.sortDir.set('asc');
+    } else if (this.sortDir() === 'asc') {
+      this.sortDir.set('desc');
+    } else {
+      this.sortCol.set(null);
+    }
+  }
+
+  sortIcon(col: string): string {
+    if (this.sortCol() !== col) return '↕';
+    return this.sortDir() === 'asc' ? '↑' : '↓';
   }
 
   formDirty(field: string): boolean {
